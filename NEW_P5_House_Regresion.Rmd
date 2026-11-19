@@ -1,7 +1,6 @@
-#NYNYNYNYNYYN
-#NYNYNYNYNYYN
-#NYNYNYNYNYYN
-#NYNYNYNYNYYN
+#Ændring#Ændring#Ændring#Ændring#Ændring
+#Ændring#Ændring#Ændring#Ændring#Ændring
+#Ændring#Ændring#Ændring#Ændring#Ændring
 ```{r}
 library(dplyr)
 library(ggplot2)
