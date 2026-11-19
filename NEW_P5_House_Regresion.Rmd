@@ -1,0 +1,505 @@
+#NYNYNYNYNYYN
+#NYNYNYNYNYYN
+#NYNYNYNYNYYN
+#NYNYNYNYNYYN
+```{r}
+library(dplyr)
+library(ggplot2)
+library(glmnet)
+library(car)
+library(corrplot)
+library(ggpubr)
+library(caret)
+```
+
+
+KUN AALBORG. Log pris og VIF. Prevent aliased coefficients
+```{r}
+#Klargør data og behold både Pris_Salg og Log_Pris_Salg
+homedata_aalborg <- homedata %>%
+  filter(KommuneNavn == "Aalborg")
+
+homedata3 <- homedata_aalborg %>%
+  mutate(Log_Pris_Salg = log(Pris_Salg)) %>%
+  select(EjdType, Pris_Salg, Log_Pris_Salg, Areal_Bolig, 
+         Areal_GarageCarport, Areal_Grund, Areal_Kaelder, Ejd_Altan, Ejd_AntalPlan, 
+         Ejd_AntalRum, Ejd_AntalSoveVaerelser, Ejd_AntalToiletter, Ejd_Energimaerke, Ejd_Opfoerelsesaar, 
+         Alder, Salgsaar, Dist_skole, Dist_raadhus, Afstemningsomraade, corona)
+
+# Korrekt konvertering af faktorer direkte på homedata1
+homedata3$EjdType <- as.factor(homedata3$EjdType)
+homedata3$Afstemningsomraade <- as.factor(homedata3$Afstemningsomraade)
+homedata3$Ejd_Energimaerke <- as.factor(homedata3$Ejd_Energimaerke)
+
+homedata3_clean <- na.omit(homedata3)
+
+# Uden logaritme (Husk at ekskludere Log_Pris_Salg fra prediktorerne)
+model_pris3 <- lm(Pris_Salg ~ . - Log_Pris_Salg, data = homedata3_clean)
+
+# Med logaritme (Husk at ekskludere den oprindelige Pris_Salg)
+model_log3 <- lm(Log_Pris_Salg ~ . - Pris_Salg, data = homedata3_clean)
+
+
+# Plot 1: Uden log
+plot(fitted(model_pris3), resid(model_pris3), 
+     xlab = "Fitted Values (Price)", 
+     ylab = "Residuals", 
+     main = "Normal Price")
+abline(h = 0, col = "red", lty = 2)
+
+# Plot 2: Med log 
+plot(fitted(model_log3), resid(model_log3), 
+     xlab = "Fitted Values (Log_price)", 
+     ylab = "Residuals", 
+     main = "Log Price")
+abline(h = 0, col = "red", lty = 2)
+
+vif(model_log3)
+
+summary(model_log3)
+```
+
+
+
+Under forholdet mellem Dist_raadhus og Afstmeningsomraader. Meget høj korrelation mellem Afstemningomraade om Dist_raadhus
+```{r}
+model_geo <- lm(
+  Dist_raadhus ~ Afstemningsomraade,
+  data = homedata3
+)
+
+summary(model_geo)
+```
+
+
+Model UDEN afstmeningsomraade (UA).
+```{r}
+#Klargør data og behold både Pris_Salg og Log_Pris_Salg
+homedata_aalborg <- homedata %>%
+  filter(KommuneNavn == "Aalborg")
+
+homedata_UA <- homedata_aalborg %>%
+  mutate(Log_Pris_Salg = log(Pris_Salg)) %>%
+  select(EjdType, Pris_Salg, Log_Pris_Salg, Areal_Bolig, 
+         Areal_GarageCarport, Areal_Grund, Areal_Kaelder, Ejd_Altan, Ejd_AntalPlan, 
+         Ejd_AntalRum, Ejd_AntalSoveVaerelser, Ejd_AntalToiletter, Ejd_Energimaerke, Ejd_Opfoerelsesaar, 
+         Alder, Salgsaar, Dist_skole, Dist_raadhus, corona)
+
+# Korrekt konvertering af faktorer direkte på homedata1
+homedata_UA$EjdType <- as.factor(homedata_UA$EjdType)
+homedata_UA$Ejd_Energimaerke <- as.factor(homedata_UA$Ejd_Energimaerke)
+
+homedata_UA_clean <- na.omit(homedata_UA)
+
+# Uden logaritme (Husk at ekskludere Log_Pris_Salg fra prediktorerne)
+model_pris_UA <- lm(Pris_Salg ~ . - Log_Pris_Salg, data = homedata_UA_clean)
+
+# Med logaritme (Husk at ekskludere den oprindelige Pris_Salg)
+model_log_UA <- lm(Log_Pris_Salg ~ . - Pris_Salg, data = homedata_UA_clean)
+
+# Plot 1: Uden log
+plot(fitted(model_pris_UA), resid(model_pris_UA), 
+     xlab = "Fitted Values (Price)", 
+     ylab = "Residuals", 
+     main = "Normal Price")
+abline(h = 0, col = "red", lty = 2)
+
+# Plot 2: Med log 
+plot(fitted(model_log_UA), resid(model_log_UA), 
+     xlab = "Fitted Values (Log_price)", 
+     ylab = "Residuals", 
+     main = "Log Price")
+abline(h = 0, col = "red", lty = 2)
+
+vif(model_log_UA)
+```
+
+Model uden Dist_raadhus (UDR)
+```{r}
+#Klargør data og behold både Pris_Salg og Log_Pris_Salg
+homedata_aalborg <- homedata %>%
+  filter(KommuneNavn == "Aalborg")
+
+homedata_UDR <- homedata_aalborg %>%
+  mutate(Log_Pris_Salg = log(Pris_Salg)) %>%
+  select(EjdType, Pris_Salg, Log_Pris_Salg, Areal_Bolig, 
+         Areal_GarageCarport, Areal_Grund, Areal_Kaelder, Ejd_Altan, Ejd_AntalPlan, 
+         Ejd_AntalRum, Ejd_AntalSoveVaerelser, Ejd_AntalToiletter, Ejd_Energimaerke, Ejd_Opfoerelsesaar, 
+         Alder, Salgsaar, Dist_skole, Afstemningsomraade, corona)
+
+# Korrekt konvertering af faktorer direkte på homedata1
+homedata_UDR$EjdType <- as.factor(homedata_UDR$EjdType)
+homedata_UDR$Ejd_Energimaerke <- as.factor(homedata_UDR$Ejd_Energimaerke)
+homedata_UDR$Afstemningsomraade <- as.factor(homedata_UDR$Afstemningsomraade)
+
+homedata_UDR_clean <- na.omit(homedata_UA)
+
+# Uden logaritme (Husk at ekskludere Log_Pris_Salg fra prediktorerne)
+model_pris_UDR <- lm(Pris_Salg ~ . - Log_Pris_Salg, data = homedata_UDR_clean)
+
+# Med logaritme (Husk at ekskludere den oprindelige Pris_Salg)
+model_log_UDR <- lm(Log_Pris_Salg ~ . - Pris_Salg, data = homedata_UDR_clean)
+
+# Plot 1: Uden log
+plot(fitted(model_pris_UDR), resid(model_pris_UDR), 
+     xlab = "Fitted Values (Price)", 
+     ylab = "Residuals", 
+     main = "Normal Price")
+abline(h = 0, col = "red", lty = 2)
+
+# Plot 2: Med log 
+plot(fitted(model_log_UDR), resid(model_log_UDR), 
+     xlab = "Fitted Values (Log_price)", 
+     ylab = "Residuals", 
+     main = "Log Price")
+abline(h = 0, col = "red", lty = 2)
+
+vif(model_log_UDR)
+```
+
+
+
+Studentized Residuals vs fitted (UA+UDR)
+```{r}
+#UA
+plot(fitted(model_log_UA), rstudent(model_log_UA),
+     main = "Studentized Residuals vs Fitted UA",
+     xlab = "Fitted Values",
+     ylab = "Studentized Residuals")
+
+
+abline(h = c(-2, 2), col = "grey50", lty = 2)
+#UDR
+plot(fitted(model_log_UDR), rstudent(model_log_UDR),
+     main = "Studentized Residuals vs Fitted UDR",
+     xlab = "Fitted Values",
+     ylab = "Studentized Residuals")
+
+#abline(h = 0, lty = 2)
+abline(h = c(-2, 2), col = "grey50", lty = 2)
+```
+QQ-Plot for fejlled (UA+UDR)
+
+```{r}
+# UA
+residuals_UA <- residuals(model_log_UA)
+
+qqnorm(residuals_UA,
+       main = "Normal Q-Q Plot of Residuals UA",
+       xlab = "Theoretical Quantiles",
+       ylab = "Sample Quantiles")
+
+qqline(residuals_UA, col = "grey50", lwd = 2)
+
+# UDR
+residuals_UDR <- residuals(model_log_UDR)
+
+qqnorm(residuals_UDR,
+       main = "Normal Q-Q Plot of Residuals UDR",
+       xlab = "Theoretical Quantiles",
+       ylab = "Sample Quantiles")
+
+qqline(residuals_UDR, col = "grey50", lwd = 2)
+```
+
+Undersøger om UA og UDR er ens
+```{r}
+# Sammenlign R-squared
+summary(model_log_UA)$r.squared
+summary(model_log_UDR)$r.squared
+
+# Sammenlign residualernes sum af kvadrater
+deviance(model_log_UA)
+deviance(model_log_UDR)
+
+# Sammenlign de forudsagte værdier
+all.equal(
+  fitted(model_log_UA),
+  fitted(model_log_UDR)
+)
+
+# Sammenlign residualerne
+all.equal(
+  residuals(model_log_UA),
+  residuals(model_log_UDR)
+)
+```
+
+
+
+Autocorrelation. (Ingen autocorelation)
+```{r}
+library(lmtest)
+# ACF Plot
+acf(residuals_UA, main = "ACD of reciduals")
+
+#Dublin-Watsn Test
+dw_test <- dwtest(model_log_UA)
+print(dw_test)
+
+#Ljung-Box Test
+lb_test <- Box.test(residuals_UA, type="Ljung-Box", lag=10)
+print(lb_test)
+```
+
+Leverage
+```{r}
+n <- nobs(model_log_UA)
+p <- length(coef(model_log_UA))
+
+#Average
+threshold_Leverage <- 2*p/n
+
+hats <- data.frame(
+  observation = 1:length(hatvalues(model_log_UA)),
+  leverage = hatvalues(model_log_UA)
+)
+
+hats_sorted <- hats[order(-hats$leverage), ]
+
+hats_sorted[hats_sorted$leverage > threshold_Leverage, ]
+```
+
+```{r}
+high_leverage <- hats_sorted[
+  hats_sorted$leverage > threshold_Leverage, 
+]
+
+# Udtræk observationsnumrene
+high_leverage_rows <- high_leverage$observation
+high_leverage_data <- homedata_UA_clean[high_leverage_rows, ]
+high_leverage_data <- cbind(Leverage = high_leverage$leverage, high_leverage_data)
+high_leverage_data
+```
+
+Cooks Distance
+
+```{r}
+n <- nobs(model_log_UA)
+p <- length(coef(model_log_UA))
+
+cutoff <- 4/(n)
+
+cooks <- cooks.distance(model_log_UA)
+
+plot(cooks,
+     type = "h",
+     main = "Cook's Distance",
+     xlab = "Observation",
+     ylab = "Cook's Distance")
+
+abline(h = cutoff, col = "red", lty = 2, lwd = 2)
+
+legend("topright",
+       legend = c("Threshold"),
+       col = c("red"),
+       lty = 2,
+       lwd = 2)
+
+#Hvilke værdier ligger over Threshold
+which(cooks> cutoff)
+```
+
+```{r}
+# 1. Opret data frame med observationsnumre og Cook's distance
+cooks_df <- data.frame(
+  observation = 1:length(cooks),
+  cooks_d = cooks
+)
+
+# 2. Sorter fra højeste til laveste Cook's distance
+cooks_sorted <- cooks_df[order(-cooks_df$cooks_d), ]
+
+# 3. Filtrer dem over cutoff-linjen
+high_cooks <- cooks_sorted[cooks_sorted$cooks_d > cutoff, ]
+
+# 4. Udtræk observationsnumrene og gem i et nyt datasæt med alle parametre
+high_cooks_rows <- high_cooks$observation
+high_cooks_data <- homedata_UA_clean[high_cooks_rows, ]
+
+# Vis datasættet
+high_cooks_data
+
+high_cooks_data <- cbind(Cooks_Distance = high_cooks$cooks_d, high_cooks_data)
+```
+
+
+Cross-Validation
+K_folds
+
+Repeated Cross-validation for model_log_UA
+```{r}
+train_control <- trainControl(method="repeatedcv", number=10, repeats = 3)
+model <- train(
+  formula(model_log_UA),
+  data = homedata_UA_clean,
+  method = "lm",
+  trControl = train_control
+)
+print(model)
+```
+
+
+#################################################################################
+#################################################################################
+#################################################################################
+
+Uden toiletter uden Dist_raadhus
+```{r}
+#Klargør data og behold både Pris_Salg og Log_Pris_Salg
+homedata_aalborg <- homedata %>%
+  filter(KommuneNavn == "Aalborg")
+
+homedata_opti <- homedata_aalborg %>%
+  mutate(Log_Pris_Salg = log(Pris_Salg)) %>%
+  select(EjdType, Pris_Salg, Log_Pris_Salg, Areal_Bolig, 
+         Areal_GarageCarport, Areal_Grund, Areal_Kaelder, Ejd_Altan, Ejd_AntalPlan, 
+         Ejd_AntalRum, Ejd_AntalSoveVaerelser, Ejd_Energimaerke, Ejd_Opfoerelsesaar, 
+         Alder, Salgsaar, Dist_skole, Afstemningsomraade, corona)
+
+# Korrekt konvertering af faktorer direkte på homedata1
+homedata_opti$EjdType <- as.factor(homedata_opti$EjdType)
+homedata_opti$Ejd_Energimaerke <- as.factor(homedata_opti$Ejd_Energimaerke)
+homedata_opti$Afstemningsomraade <- as.factor(homedata_opti$Afstemningsomraade)
+
+homedata_opti_clean <- na.omit(homedata_opti)
+
+# Uden logaritme (Husk at ekskludere Log_Pris_Salg fra prediktorerne)
+model_pris_opti <- lm(Pris_Salg ~ . - Log_Pris_Salg, data = homedata_opti_clean)
+
+# Med logaritme (Husk at ekskludere den oprindelige Pris_Salg)
+model_log_opti <- lm(Log_Pris_Salg ~ . - Pris_Salg, data = homedata_opti_clean)
+
+# Plot 1: Uden log
+plot(fitted(model_pris_opti), resid(model_pris_opti), 
+     xlab = "Fitted Values (Price)", 
+     ylab = "Residuals", 
+     main = "Normal Price")
+abline(h = 0, col = "red", lty = 2)
+
+# Plot 2: Med log 
+plot(fitted(model_log_opti), resid(model_log_opti), 
+     xlab = "Fitted Values (Log_price)", 
+     ylab = "Residuals", 
+     main = "Log Price")
+abline(h = 0, col = "red", lty = 2)
+
+vif(model_log_opti)
+```
+
+```{r}
+plot(fitted(model_log_opti), rstudent(model_log_opti),
+     main = "Studentized Residuals vs Fitted UA",
+     xlab = "Fitted Values",
+     ylab = "Studentized Residuals")
+
+
+abline(h = c(-2, 2), col = "grey50", lty = 2)
+```
+```{r}
+residuals_opti <- residuals(model_log_opti)
+
+qqnorm(residuals_opti,
+       main = "Normal Q-Q Plot of Residuals UA",
+       xlab = "Theoretical Quantiles",
+       ylab = "Sample Quantiles")
+
+qqline(residuals_opti, col = "grey50", lwd = 2)
+```
+
+Leverage
+```{r}
+n <- nobs(model_log_opti)
+p <- length(coef(model_log_opti))
+
+#Average
+threshold_Leverage2 <- 2*p/n
+
+hats2 <- data.frame(
+  observation2 = 1:length(hatvalues(model_log_opti)),
+  leverage2 = hatvalues(model_log_opti)
+)
+
+hats_sorted2 <- hats2[order(-hats2$leverage2), ]
+
+hats_sorted2[hats_sorted2$leverage2 > threshold_Leverage2, ]
+```
+```{r}
+high_leverage2 <- hats_sorted2[
+  hats_sorted2$leverage2 > threshold_Leverage2, 
+]
+
+# Udtræk observationsnumrene
+high_leverage_rows2 <- high_leverage2$observation2
+high_leverage_data2 <- homedata_opti[high_leverage_rows2, ]
+high_leverage_data2 <- cbind(Leverage2 = high_leverage2$leverage2, high_leverage_data2)
+high_leverage_data2
+```
+
+Cooks Distance
+
+```{r}
+n <- nobs(model_log_opti)
+p <- length(coef(model_log_opti))
+
+cutoff2 <- 4/(n)
+
+cooks2 <- cooks.distance(model_log_opti)
+
+plot(cooks2,
+     type = "h",
+     main = "Cook's Distance",
+     xlab = "Observation",
+     ylab = "Cook's Distance")
+
+abline(h = cutoff2, col = "red", lty = 2, lwd = 2)
+
+legend("topright",
+       legend = c("Threshold"),
+       col = c("red"),
+       lty = 2,
+       lwd = 2)
+
+#Hvilke værdier ligger over Threshold
+which(cooks2> cutoff2)
+```
+
+```{r}
+# 1. Opret data frame med observationsnumre og Cook's distance
+cooks_df2 <- data.frame(
+  observation2 = 1:length(cooks2),
+  cooks_d2 = cooks2
+)
+
+# 2. Sorter fra højeste til laveste Cook's distance
+cooks_sorted2 <- cooks_df2[order(-cooks_df2$cooks_d2), ]
+
+# 3. Filtrer dem over cutoff-linjen
+high_cooks2 <- cooks_sorted2[cooks_sorted2$cooks_d2 > cutoff2, ]
+
+# 4. Udtræk observationsnumrene og gem i et nyt datasæt med alle parametre
+high_cooks_rows2 <- high_cooks2$observation2
+high_cooks_data2 <- homedata_opti[high_cooks_rows2, ]
+
+# Vis datasættet
+high_cooks_data2
+
+high_cooks_data2 <- cbind(Cooks_Distance2 = high_cooks2$cooks_d2, high_cooks_data2)
+```
+
+
+Cross-Validation
+K_folds
+
+Repeated Cross-validation for model_log_opti
+```{r}
+train_control2 <- trainControl(method="repeatedcv", number=10, repeats = 3)
+model2 <- train(
+  formula(model_log_opti),
+  data = homedata_opti_clean,
+  method = "lm",
+  trControl = train_control2
+)
+print(model2)
+```
+
