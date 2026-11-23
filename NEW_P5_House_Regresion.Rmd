@@ -2,6 +2,7 @@
 #Ændring#Ændring#Ændring#Ændring#Ændring
 #Ændring#Ændring#Ændring#Ændring#Ændring
 ```{r}
+load("Homedata.Rda")
 library(dplyr)
 library(ggplot2)
 library(glmnet)
@@ -60,7 +61,7 @@ summary(model_log3)
 
 
 
-Under forholdet mellem Dist_raadhus og Afstmeningsomraader. Meget høj korrelation mellem Afstemningomraade om Dist_raadhus
+Undersøger forholdet mellem Dist_raadhus og Afstmeningsomraader. Meget høj korrelation mellem Afstemningomraade om Dist_raadhus
 ```{r}
 model_geo <- lm(
   Dist_raadhus ~ Afstemningsomraade,
@@ -156,51 +157,6 @@ abline(h = 0, col = "red", lty = 2)
 vif(model_log_UDR)
 ```
 
-
-
-Studentized Residuals vs fitted (UA+UDR)
-```{r}
-#UA
-plot(fitted(model_log_UA), rstudent(model_log_UA),
-     main = "Studentized Residuals vs Fitted UA",
-     xlab = "Fitted Values",
-     ylab = "Studentized Residuals")
-
-
-abline(h = c(-2, 2), col = "grey50", lty = 2)
-#UDR
-plot(fitted(model_log_UDR), rstudent(model_log_UDR),
-     main = "Studentized Residuals vs Fitted UDR",
-     xlab = "Fitted Values",
-     ylab = "Studentized Residuals")
-
-#abline(h = 0, lty = 2)
-abline(h = c(-2, 2), col = "grey50", lty = 2)
-```
-QQ-Plot for fejlled (UA+UDR)
-
-```{r}
-# UA
-residuals_UA <- residuals(model_log_UA)
-
-qqnorm(residuals_UA,
-       main = "Normal Q-Q Plot of Residuals UA",
-       xlab = "Theoretical Quantiles",
-       ylab = "Sample Quantiles")
-
-qqline(residuals_UA, col = "grey50", lwd = 2)
-
-# UDR
-residuals_UDR <- residuals(model_log_UDR)
-
-qqnorm(residuals_UDR,
-       main = "Normal Q-Q Plot of Residuals UDR",
-       xlab = "Theoretical Quantiles",
-       ylab = "Sample Quantiles")
-
-qqline(residuals_UDR, col = "grey50", lwd = 2)
-```
-
 Undersøger om UA og UDR er ens
 ```{r}
 # Sammenlign R-squared
@@ -224,125 +180,9 @@ all.equal(
 )
 ```
 
-
-
-Autocorrelation. (Ingen autocorelation)
-```{r}
-library(lmtest)
-# ACF Plot
-acf(residuals_UA, main = "ACD of reciduals")
-
-#Dublin-Watsn Test
-dw_test <- dwtest(model_log_UA)
-print(dw_test)
-
-#Ljung-Box Test
-lb_test <- Box.test(residuals_UA, type="Ljung-Box", lag=10)
-print(lb_test)
-```
-
-Leverage
-```{r}
-n <- nobs(model_log_UA)
-p <- length(coef(model_log_UA))
-
-#Average
-threshold_Leverage <- 2*p/n
-
-hats <- data.frame(
-  observation = 1:length(hatvalues(model_log_UA)),
-  leverage = hatvalues(model_log_UA)
-)
-
-hats_sorted <- hats[order(-hats$leverage), ]
-
-hats_sorted[hats_sorted$leverage > threshold_Leverage, ]
-```
-
-```{r}
-high_leverage <- hats_sorted[
-  hats_sorted$leverage > threshold_Leverage, 
-]
-
-# Udtræk observationsnumrene
-high_leverage_rows <- high_leverage$observation
-high_leverage_data <- homedata_UA_clean[high_leverage_rows, ]
-high_leverage_data <- cbind(Leverage = high_leverage$leverage, high_leverage_data)
-high_leverage_data
-```
-
-Cooks Distance
-
-```{r}
-n <- nobs(model_log_UA)
-p <- length(coef(model_log_UA))
-
-cutoff <- 4/(n)
-
-cooks <- cooks.distance(model_log_UA)
-
-plot(cooks,
-     type = "h",
-     main = "Cook's Distance",
-     xlab = "Observation",
-     ylab = "Cook's Distance")
-
-abline(h = cutoff, col = "red", lty = 2, lwd = 2)
-
-legend("topright",
-       legend = c("Threshold"),
-       col = c("red"),
-       lty = 2,
-       lwd = 2)
-
-#Hvilke værdier ligger over Threshold
-which(cooks> cutoff)
-```
-
-```{r}
-# 1. Opret data frame med observationsnumre og Cook's distance
-cooks_df <- data.frame(
-  observation = 1:length(cooks),
-  cooks_d = cooks
-)
-
-# 2. Sorter fra højeste til laveste Cook's distance
-cooks_sorted <- cooks_df[order(-cooks_df$cooks_d), ]
-
-# 3. Filtrer dem over cutoff-linjen
-high_cooks <- cooks_sorted[cooks_sorted$cooks_d > cutoff, ]
-
-# 4. Udtræk observationsnumrene og gem i et nyt datasæt med alle parametre
-high_cooks_rows <- high_cooks$observation
-high_cooks_data <- homedata_UA_clean[high_cooks_rows, ]
-
-# Vis datasættet
-high_cooks_data
-
-high_cooks_data <- cbind(Cooks_Distance = high_cooks$cooks_d, high_cooks_data)
-```
-
-
-Cross-Validation
-K_folds
-
-Repeated Cross-validation for model_log_UA
-```{r}
-train_control <- trainControl(method="repeatedcv", number=10, repeats = 3)
-model <- train(
-  formula(model_log_UA),
-  data = homedata_UA_clean,
-  method = "lm",
-  trControl = train_control
-)
-print(model)
-```
-
-
 #################################################################################
 #################################################################################
 #################################################################################
-
 Uden toiletter uden Dist_raadhus
 ```{r}
 #Klargør data og behold både Pris_Salg og Log_Pris_Salg
@@ -384,46 +224,149 @@ plot(fitted(model_log_opti), resid(model_log_opti),
 abline(h = 0, col = "red", lty = 2)
 
 vif(model_log_opti)
+
+summary(model_log_opti)
 ```
 
+Backward test og Partial F-test
 ```{r}
-plot(fitted(model_log_opti), rstudent(model_log_opti),
-     main = "Studentized Residuals vs Fitted UA",
+model_step <- step( model_log_opti, direction ="backward")
+summary(model_step)
+```
+```{r}
+drop1(model_log_opti, test="F")
+```
+Laver ny model uden Corona, AntalRum, AntalPlan, Altan. (Kun meget lidt dårligere) 
+```{r}
+homedata_prime <- homedata_aalborg %>%
+  mutate(Log_Pris_Salg = log(Pris_Salg)) %>%
+  select(EjdType, Pris_Salg, Log_Pris_Salg, Areal_Bolig, 
+         Areal_GarageCarport, Areal_Grund, Areal_Kaelder, 
+         Ejd_AntalSoveVaerelser, Ejd_Energimaerke, Ejd_Opfoerelsesaar, 
+         Alder, Salgsaar, Dist_skole, Afstemningsomraade)
+
+# Korrekt konvertering af faktorer direkte på homedata1
+homedata_prime$EjdType <- as.factor(homedata_prime$EjdType)
+homedata_prime$Ejd_Energimaerke <- as.factor(homedata_prime$Ejd_Energimaerke)
+homedata_prime$Afstemningsomraade <- as.factor(homedata_prime$Afstemningsomraade)
+
+homedata_prime_clean <- na.omit(homedata_prime)
+
+model_log_prime <- lm(Log_Pris_Salg ~ . - Pris_Salg, data = homedata_prime_clean)
+summary(model_log_prime)
+```
+
+
+Cross-Validation
+
+Repeated Cross-validation for model_log_opti
+```{r}
+train_control2 <- trainControl(method="repeatedcv", number=10, repeats = 3)
+model2 <- train(
+  formula(model_log_opti),
+  data = homedata_opti_clean,
+  method = "lm",
+  trControl = train_control2
+)
+print(model2)
+```
+Repeated Cross-validation for model_log_prime (stort set ingen forskel)
+```{r}
+train_control3 <- trainControl(method="repeatedcv", number=10, repeats = 3)
+model3 <- train(
+  formula(model_log_prime),
+  data = homedata_prime_clean,
+  method = "lm",
+  trControl = train_control3
+)
+print(model3)
+```
+
+
+
+Residual analyzes (Diagnostic plots)
+```{r}
+plot(fitted(model_log_prime), rstudent(model_log_prime),
+     main = "Studentized Residuals vs Fitted",
      xlab = "Fitted Values",
      ylab = "Studentized Residuals")
 
 
 abline(h = c(-2, 2), col = "grey50", lty = 2)
+
+plot(fitted(model_log_prime), rstandard(model_log_prime),
+     main = "Standard Residuals vs Fitted",
+     xlab = "Fitted Values",
+     ylab = "Standard Residuals")
+
+
+abline(h = c(-2, 2), col = "grey50", lty = 2)
 ```
 ```{r}
-residuals_opti <- residuals(model_log_opti)
+residuals_prime <- residuals(model_log_prime)
 
-qqnorm(residuals_opti,
+qqnorm(residuals_prime,
        main = "Normal Q-Q Plot of Residuals UA",
        xlab = "Theoretical Quantiles",
        ylab = "Sample Quantiles")
 
-qqline(residuals_opti, col = "grey50", lwd = 2)
+qqline(residuals_prime, col = "grey50", lwd = 2)
+
+
+
+hist(residuals_prime, prob = TRUE, main = "Distribution of Residuals", xlab = "Residuals", col = "lightblue")
+curve(dnorm(x, mean = mean(residuals_prime), sd = sd(residuals_prime)), add = TRUE, col = "red", lwd = 2)
+
 ```
+```{r}
+sqrt_abs_residuals <- sqrt(abs(residuals_prime))
+plot(fitted(model_log_prime),sqrt_abs_residuals,
+xlab="Fitted values",
+ylab="Square Root of Absolute Residuals",
+main="Scale-Location Plot"
+)
+lines(smooth.spline(fitted(model_log_prime),sqrt_abs_residuals),col="red", lwd=2)
+```
+
+```{r}
+plot(hatvalues(model_log_prime), rstandard(model_log_prime),
+     xlab = "Leverage",
+     ylab = "Standardized residuals",
+     main = "Residuals vs Leverage")
+
+abline(h = 0, col = "red", lty = 2)
+
+# Inkluder cooks disatnce
+
+
+
+# Plot Residuals vs. Leverage with Cook's distance contours
+plot(model_log_prime, which = 5)
+
+# Inspect exact values programmatically
+lev <- hatvalues(model_log_prime)
+std_res <- rstandard(model_log_prime)
+cook_d <- cooks.distance(model_log_prime)
+
+# Flag observations with Cook's distance > 0.5
+which(cook_d > 0.5)
+```
+
 
 Leverage
 ```{r}
-n <- nobs(model_log_opti)
-p <- length(coef(model_log_opti))
+n <- nobs(model_log_prime)
+p <- length(coef(model_log_prime))
 
 #Average
 threshold_Leverage2 <- 2*p/n
 
 hats2 <- data.frame(
-  observation2 = 1:length(hatvalues(model_log_opti)),
-  leverage2 = hatvalues(model_log_opti)
+  observation2 = 1:length(hatvalues(model_log_prime)),
+  leverage2 = hatvalues(model_log_prime)
 )
 
 hats_sorted2 <- hats2[order(-hats2$leverage2), ]
-
-hats_sorted2[hats_sorted2$leverage2 > threshold_Leverage2, ]
-```
-```{r}
 high_leverage2 <- hats_sorted2[
   hats_sorted2$leverage2 > threshold_Leverage2, 
 ]
@@ -434,6 +377,7 @@ high_leverage_data2 <- homedata_opti[high_leverage_rows2, ]
 high_leverage_data2 <- cbind(Leverage2 = high_leverage2$leverage2, high_leverage_data2)
 high_leverage_data2
 ```
+
 
 Cooks Distance
 
@@ -487,18 +431,122 @@ high_cooks_data2 <- cbind(Cooks_Distance2 = high_cooks2$cooks_d2, high_cooks_dat
 ```
 
 
-Cross-Validation
-K_folds
+###########################################
 
-Repeated Cross-validation for model_log_opti
+Adjusted for inflation
 ```{r}
-train_control2 <- trainControl(method="repeatedcv", number=10, repeats = 3)
-model2 <- train(
-  formula(model_log_opti),
-  data = homedata_opti_clean,
-  method = "lm",
-  trControl = train_control2
+CPI <- data.frame(
+  Salgsaar = c(2011,2012, 2013, 2014,2015,2016,2017,2018,2019,2020,2021,2022),
+  cpi = c(79.2,81.1375,81.21916667,81.3025, 81.36666667, 81.4175, 81.47583333, 81.53583333, 81.58, 81.605, 81.63583333, 81.6783333)
 )
-print(model2)
+
+homedata_aalborg2 <- homedata_aalborg %>%
+  left_join(CPI, by="Salgsaar")
+
+CPI_basis <- CPI$cpi[CPI$Salgsaar==2022]
+homedata_inflation <- homedata_aalborg2 %>%
+  mutate(Realpris=Pris_Salg*CPI_basis/cpi)
+
 ```
 
+```{r}
+homedata_inflation <- homedata_inflation %>%
+  mutate(Log_PrisI_Salg = log(Realpris)) %>%
+  select(EjdType, Realpris, Log_PrisI_Salg, Areal_Bolig, 
+         Areal_GarageCarport, Areal_Grund, Areal_Kaelder, 
+          Ejd_AntalSoveVaerelser, Ejd_Energimaerke, Ejd_Opfoerelsesaar, 
+         Alder, Salgsaar, Dist_skole, Afstemningsomraade)
+
+# Korrekt konvertering af faktorer direkte på homedata1
+homedata_inflation$EjdType <- as.factor(homedata_inflation$EjdType)
+homedata_inflation$Ejd_Energimaerke <- as.factor(homedata_inflation$Ejd_Energimaerke)
+homedata_inflation$Afstemningsomraade <- as.factor(homedata_inflation$Afstemningsomraade)
+
+homedata_inflation_clean <- na.omit(homedata_inflation)
+
+# Med logaritme (Husk at ekskludere den oprindelige Pris_Salg)
+model_log_inflation <- lm(Log_PrisI_Salg ~ . - Realpris, data = homedata_inflation_clean)
+
+summary(model_log_inflation)
+```
+
+Repeated Cross-validation for model_log_inflation
+```{r}
+train_control5 <- trainControl(method="repeatedcv", number=10, repeats = 3)
+model5 <- train(
+  formula(model_log_inflation),
+  data = homedata_inflation_clean,
+  method = "lm",
+  trControl = train_control5
+)
+print(model5)
+```
+
+
+Residual analyzes (Diagnostic plots)
+```{r}
+plot(fitted(model_log_inflation), rstudent(model_log_inflation),
+     main = "Studentized Residuals vs Fitted",
+     xlab = "Fitted Values",
+     ylab = "Studentized Residuals")
+
+
+abline(h = c(-2, 2), col = "grey50", lty = 2)
+
+plot(fitted(model_log_inflation), rstandard(model_log_inflation),
+     main = "Standard Residuals vs Fitted",
+     xlab = "Fitted Values",
+     ylab = "Standard Residuals")
+
+
+abline(h = c(-2, 2), col = "grey50", lty = 2)
+```
+```{r}
+residuals_inflation <- residuals(model_log_inflation)
+
+qqnorm(residuals_inflation,
+       main = "Normal Q-Q Plot of Residuals UA",
+       xlab = "Theoretical Quantiles",
+       ylab = "Sample Quantiles")
+
+qqline(residuals_inflation, col = "grey50", lwd = 2)
+
+
+
+hist(residuals_inflation, prob = TRUE, main = "Distribution of Residuals", xlab = "Residuals", col = "lightblue")
+curve(dnorm(x, mean = mean(residuals_inflation), sd = sd(residuals_inflation)), add = TRUE, col = "red", lwd = 2)
+
+```
+```{r}
+sqrt_abs_residuals_inflation <- sqrt(abs(residuals_inflation))
+plot(fitted(model_log_inflation),sqrt_abs_residuals_inflation,
+xlab="Fitted values",
+ylab="Square Root of Absolute Residuals",
+main="Scale-Location Plot"
+)
+lines(smooth.spline(fitted(model_log_inflation),sqrt_abs_residuals_inflation),col="red", lwd=2)
+```
+
+```{r}
+plot(hatvalues(model_log_inflation), rstandard(model_log_inflation),
+     xlab = "Leverage",
+     ylab = "Standardized residuals",
+     main = "Residuals vs Leverage")
+
+abline(h = 0, col = "red", lty = 2)
+
+# Inkluder cooks disatnce
+
+
+
+# Plot Residuals vs. Leverage with Cook's distance contours
+plot(model_log_inflation, which = 5)
+
+# Inspect exact values programmatically
+lev <- hatvalues(model_log_inflation)
+std_res <- rstandard(model_log_inflation)
+cook_d <- cooks.distance(model_log_inflation)
+
+# Flag observations with Cook's distance > 0.5
+which(cook_d > 0.5)
+```
