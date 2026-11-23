@@ -255,6 +255,22 @@ homedata_prime_clean <- na.omit(homedata_prime)
 model_log_prime <- lm(Log_Pris_Salg ~ . - Pris_Salg, data = homedata_prime_clean)
 summary(model_log_prime)
 ```
+Under om Designmatricen er fuld rank og n>p
+```{r}
+vif(model_log_prime)
+X <- model.matrix(model_log_prime)
+qr(X)$rank
+ncol(X)
+
+n <- nrow(X)
+p <- ncol(X)
+n>p
+
+```
+
+
+
+
 
 
 Cross-Validation
@@ -270,6 +286,10 @@ model2 <- train(
 )
 print(model2)
 ```
+
+
+
+
 Repeated Cross-validation for model_log_prime (stort set ingen forskel)
 ```{r}
 train_control3 <- trainControl(method="repeatedcv", number=10, repeats = 3)
@@ -285,6 +305,15 @@ print(model3)
 
 
 Residual analyzes (Diagnostic plots)
+
+```{r}
+stud_res <- rstudent(model_log_prime)
+
+plot(homedata_prime_clean$Log_Pris_Salg, stud_res, ylab="Studentized Residuals", xlab="Log_Pris" )
+abline(h=c(-2,2))
+```
+
+
 ```{r}
 plot(fitted(model_log_prime), rstudent(model_log_prime),
      main = "Studentized Residuals vs Fitted",
@@ -302,34 +331,51 @@ plot(fitted(model_log_prime), rstandard(model_log_prime),
 
 abline(h = c(-2, 2), col = "grey50", lty = 2)
 ```
-```{r}
-residuals_prime <- residuals(model_log_prime)
 
-qqnorm(residuals_prime,
+Undersøger den med stor abs residual (SKAL VI UNDERSØGE FLERE?)
+```{r}
+abs_res <- abs(rstudent(model_log_prime)) 
+which(abs_res>4)
+homedata_prime_clean[c(24,970,1551),]
+```
+Ny model uden række 24
+```{r}
+homedata_prime_clean2 <- homedata_prime_clean[-24, ]
+model_log_prime2 <- lm(Log_Pris_Salg ~ . - Pris_Salg, data = homedata_prime_clean2)
+summary(model_log_prime2)
+```
+
+
+
+```{r}
+residuals_prime2 <- residuals(model_log_prime2)
+
+qqnorm(residuals_prime2,
        main = "Normal Q-Q Plot of Residuals UA",
        xlab = "Theoretical Quantiles",
        ylab = "Sample Quantiles")
 
-qqline(residuals_prime, col = "grey50", lwd = 2)
+qqline(residuals_prime2, col = "grey50", lwd = 2)
 
 
 
-hist(residuals_prime, prob = TRUE, main = "Distribution of Residuals", xlab = "Residuals", col = "lightblue")
-curve(dnorm(x, mean = mean(residuals_prime), sd = sd(residuals_prime)), add = TRUE, col = "red", lwd = 2)
+hist(residuals_prime2, prob = TRUE, main = "Distribution of Residuals", xlab = "Residuals", col = "lightblue")
+curve(dnorm(x, mean = mean(residuals_prime2), sd = sd(residuals_prime2)), add = TRUE, col = "red", lwd = 2)
 
 ```
 ```{r}
-sqrt_abs_residuals <- sqrt(abs(residuals_prime))
-plot(fitted(model_log_prime),sqrt_abs_residuals,
+#Verifies Homoscedasticity
+sqrt_abs_residuals <- sqrt(abs(residuals_prime2))
+plot(fitted(model_log_prime2),sqrt_abs_residuals,
 xlab="Fitted values",
 ylab="Square Root of Absolute Residuals",
 main="Scale-Location Plot"
 )
-lines(smooth.spline(fitted(model_log_prime),sqrt_abs_residuals),col="red", lwd=2)
+lines(smooth.spline(fitted(model_log_prime2),sqrt_abs_residuals),col="red", lwd=2)
 ```
-
+(Kan man zoom ud og vise cooks distance mere tydelig?)
 ```{r}
-plot(hatvalues(model_log_prime), rstandard(model_log_prime),
+plot(hatvalues(model_log_prime2), rstandard(model_log_prime2),
      xlab = "Leverage",
      ylab = "Standardized residuals",
      main = "Residuals vs Leverage")
@@ -341,29 +387,29 @@ abline(h = 0, col = "red", lty = 2)
 
 
 # Plot Residuals vs. Leverage with Cook's distance contours
-plot(model_log_prime, which = 5)
+plot(model_log_prime2, which = 5)
 
 # Inspect exact values programmatically
-lev <- hatvalues(model_log_prime)
-std_res <- rstandard(model_log_prime)
-cook_d <- cooks.distance(model_log_prime)
+lev <- hatvalues(model_log_prime2)
+std_res <- rstandard(model_log_prime2)
+cook_d <- cooks.distance(model_log_prime2)
 
 # Flag observations with Cook's distance > 0.5
 which(cook_d > 0.5)
 ```
 
 
-Leverage
+Leverage (Hvordan laver man de plots på side 59 i noterne?)
 ```{r}
-n <- nobs(model_log_prime)
-p <- length(coef(model_log_prime))
+n <- nobs(model_log_prime2)
+p <- length(coef(model_log_prime2))
 
 #Average
 threshold_Leverage2 <- 2*p/n
 
 hats2 <- data.frame(
-  observation2 = 1:length(hatvalues(model_log_prime)),
-  leverage2 = hatvalues(model_log_prime)
+  observation2 = 1:length(hatvalues(model_log_prime2)),
+  leverage2 = hatvalues(model_log_prime2)
 )
 
 hats_sorted2 <- hats2[order(-hats2$leverage2), ]
@@ -379,61 +425,10 @@ high_leverage_data2
 ```
 
 
-Cooks Distance
-
-```{r}
-n <- nobs(model_log_opti)
-p <- length(coef(model_log_opti))
-
-cutoff2 <- 4/(n)
-
-cooks2 <- cooks.distance(model_log_opti)
-
-plot(cooks2,
-     type = "h",
-     main = "Cook's Distance",
-     xlab = "Observation",
-     ylab = "Cook's Distance")
-
-abline(h = cutoff2, col = "red", lty = 2, lwd = 2)
-
-legend("topright",
-       legend = c("Threshold"),
-       col = c("red"),
-       lty = 2,
-       lwd = 2)
-
-#Hvilke værdier ligger over Threshold
-which(cooks2> cutoff2)
-```
-
-```{r}
-# 1. Opret data frame med observationsnumre og Cook's distance
-cooks_df2 <- data.frame(
-  observation2 = 1:length(cooks2),
-  cooks_d2 = cooks2
-)
-
-# 2. Sorter fra højeste til laveste Cook's distance
-cooks_sorted2 <- cooks_df2[order(-cooks_df2$cooks_d2), ]
-
-# 3. Filtrer dem over cutoff-linjen
-high_cooks2 <- cooks_sorted2[cooks_sorted2$cooks_d2 > cutoff2, ]
-
-# 4. Udtræk observationsnumrene og gem i et nyt datasæt med alle parametre
-high_cooks_rows2 <- high_cooks2$observation2
-high_cooks_data2 <- homedata_opti[high_cooks_rows2, ]
-
-# Vis datasættet
-high_cooks_data2
-
-high_cooks_data2 <- cbind(Cooks_Distance2 = high_cooks2$cooks_d2, high_cooks_data2)
-```
-
 
 ###########################################
 
-Adjusted for inflation
+Adjusted for inflation (Dårliger?)
 ```{r}
 CPI <- data.frame(
   Salgsaar = c(2011,2012, 2013, 2014,2015,2016,2017,2018,2019,2020,2021,2022),
@@ -444,6 +439,7 @@ homedata_aalborg2 <- homedata_aalborg %>%
   left_join(CPI, by="Salgsaar")
 
 CPI_basis <- CPI$cpi[CPI$Salgsaar==2022]
+
 homedata_inflation <- homedata_aalborg2 %>%
   mutate(Realpris=Pris_Salg*CPI_basis/cpi)
 
@@ -590,4 +586,6 @@ model_COVID <- train(
 )
 print(model_COVID)
 ```
+
+
 
