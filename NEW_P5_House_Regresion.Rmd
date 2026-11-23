@@ -550,3 +550,44 @@ cook_d <- cooks.distance(model_log_inflation)
 # Flag observations with Cook's distance > 0.5
 which(cook_d > 0.5)
 ```
+
+#####################################
+Pre-COVID
+
+```{r}
+homedata_aalborg <- homedata %>%
+  filter(KommuneNavn == "Aalborg",
+         between(Salgsaar, 2011, 2019))
+
+homedata_COVID <- homedata_aalborg %>%
+  mutate(Log_Pris_Salg = log(Pris_Salg)) %>%
+  select(EjdType, Pris_Salg, Log_Pris_Salg, Areal_Bolig, 
+         Areal_GarageCarport, Areal_Grund, Areal_Kaelder, 
+         Ejd_AntalSoveVaerelser, Ejd_Energimaerke, Ejd_Opfoerelsesaar, 
+         Alder, Salgsaar, Dist_skole, Afstemningsomraade)
+
+# Korrekt konvertering af faktorer direkte på homedata1
+homedata_COVID$EjdType <- as.factor(homedata_COVID$EjdType)
+homedata_COVID$Ejd_Energimaerke <- as.factor(homedata_COVID$Ejd_Energimaerke)
+homedata_COVID$Afstemningsomraade <- as.factor(homedata_COVID$Afstemningsomraade)
+
+homedata_COVID_clean <- na.omit(homedata_COVID)
+
+
+# Med logaritme (Husk at ekskludere den oprindelige Pris_Salg)
+model_log_COVID <- lm(Log_Pris_Salg ~ . - Pris_Salg, data = homedata_COVID_clean)
+
+summary(model_log_COVID)
+```
+
+```{r}
+train_control_COVID <- trainControl(method="repeatedcv", number=10, repeats = 3)
+model_COVID <- train(
+  formula(model_log_COVID),
+  data = homedata_COVID_clean,
+  method = "lm",
+  trControl = train_control_COVID
+)
+print(model_COVID)
+```
+
