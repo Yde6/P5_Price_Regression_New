@@ -1,0 +1,537 @@
+## 1. Indlæs biblioteker.
+
+```{r}
+library(dplyr)
+library(car)
+```
+
+## 2. Indlæs data. Fjern fodnoter og lignende fra Realkreditrente. Ændre type til numeric.
+
+```{r}
+# Boligdata
+homedata <- read.csv(
+  "C:/Users/frede/OneDrive/Dokumenter/5 semester boligdata/homedata.csv"
+)
+
+# Inflation
+inflation_nettoprisindeks <- read.csv2(
+  "C:/Users/frede/OneDrive/Dokumenter/5 semester boligdata/Nettoprisindeks_ændring.csv"
+)
+
+# Bankrente
+rente_bank <- read.csv2(
+  "C:/Users/frede/OneDrive/Dokumenter/5 semester boligdata/Rentebank.csv"
+)
+
+# Realkreditrente
+rente_realkredit_raw <- read.csv(
+  "C:/Users/frede/OneDrive/Dokumenter/5 semester boligdata/realkreditrente.csv",
+  fileEncoding = "Windows-1252",
+  skip = 3,
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+
+# Opret datasæt med realkreditrente
+rente_realkredit <- data.frame(
+  tidsperiode = names(rente_realkredit_raw)[-1],
+  rente_realkredit = as.numeric(unlist(rente_realkredit_raw[3, -1]))
+)
+
+# Fjern manglende observationer
+rente_realkredit <- na.omit(rente_realkredit)
+
+# Konverter relevante variable til numeriske værdier
+homedata$Pris_Salg <- as.numeric(homedata$Pris_Salg)
+
+inflation_nettoprisindeks$inflation <- as.numeric(
+  inflation_nettoprisindeks$inflation
+)
+
+rente_bank$bankrente <- as.numeric(
+  rente_bank$bankrente
+)
+```
+
+## 3. Tilføjer inflation, bank rente og realkreditrenten til datamatricen.
+
+```{r}
+homedata_tilføjelser <- homedata
+
+homedata_tilføjelser <- homedata_tilføjelser %>%
+  mutate(
+    KvartalNummer = case_when(
+      Salgsmaaned %in% c("Januar", "Februar", "Marts") ~ "K1",
+      Salgsmaaned %in% c("April", "Maj", "Juni") ~ "K2",
+      Salgsmaaned %in% c("Juli", "August", "September") ~ "K3",
+      Salgsmaaned %in% c("Oktober", "November", "December") ~ "K4"
+    ),
+    tidsperiode = paste0(Salgsaar, KvartalNummer)
+  )
+
+# Tilføj årlig inflation
+homedata_tilføjelser <- homedata_tilføjelser %>%
+  left_join(
+    inflation_nettoprisindeks,
+    by = c("Salgsaar" = "tidsperiode")
+  )
+
+# Tilføj bankrente
+homedata_tilføjelser <- homedata_tilføjelser %>%
+  left_join(
+    rente_bank,
+    by = "tidsperiode"
+  )
+
+# Tilføj realkreditrente
+homedata_tilføjelser <- homedata_tilføjelser %>%
+  left_join(
+    rente_realkredit,
+    by = "tidsperiode"
+  )
+
+# Fjern midlertidige tidsvariable
+homedata_tilføjelser <- homedata_tilføjelser %>%
+  select(-KvartalNummer, -tidsperiode)
+
+names(homedata_tilføjelser)
+```
+
+## 4. Ryd op i boligdata. Fjerner salgsdata udover prisen på huset. Fjerner Koordinater. Fjerner sags- og støjoplysninger. Fjerner duplikater af tids data.
+
+```{r}
+homedata_clean <- homedata_tilføjelser
+
+# Fjern irrelevante kolonner
+homedata_clean <- homedata_clean %>%
+  select(-any_of(c(
+    "Adresse_Fuld",
+    "NK_SagId",
+    "row_id",
+    "KVHX",
+    "DWID_Periode_Salg",
+    "DWID_Periode_Formid",
+    "DWID_Periode_Annoncering",
+    "DWID_Periode_Oprettet",
+    "Bynavn",
+    "DWID_Projektsalg",
+    "Sag_AnnonceretNettet",
+    "Adresse_PostNr",
+    "Adresse_Etage",
+    "Areal_Bolig_Commercial",
+
+    # Geografiske koordinater
+    "GisX_Wgs84",
+    "GisY_Wgs84",
+
+    # Sags- og støjvariable
+    "SagsStatus",
+    "SagsType",
+    "Beloeb_MDBrutto",
+    "Beloeb_MDNetto",
+    "Beloeb_Udbetaling",
+    "Beloeb_EjerUdgift",
+    "Pris_FoersteUdbud",
+    "AntalStatusmoederSaelger",
+    "AntalFremvisninger",
+    "Dato_AktuelUdbudPris",
+    "Dato_Annoncering",
+    "Salgstid",
+    "Salgsaar",
+    
+
+    # Øvrige prisvariable
+    "Pris_EjdVurdering",
+    "Pris_AktuelUdbud",
+    "Ejd_Ombygningsaar"
+  )))
+
+names(homedata_clean)
+```
+
+
+## 5. Ændre type så R automatisk laver dummy variable.
+
+```{r}
+model_data <- homedata_clean
+
+model_data <- model_data %>%
+  mutate(
+    Postnr = as.factor(Postnr),
+    RegionNavn = as.factor(RegionNavn),
+    KommuneNavn = as.factor(KommuneNavn),
+    Sogn = as.factor(Sogn),
+
+    EjdType = as.factor(EjdType),
+    Ejd_Altan = as.factor(Ejd_Altan),
+    Ejd_Energimaerke = as.factor(Ejd_Energimaerke)
+  )
+```
+
+
+## 6. Opdeler data så der er ekstra til at teste modellerne. Definerer liste over variable som skal sammenlignes.
+
+```{r}
+# 6. Opret separate datasæt for geografiske variable
+
+geo_vars <- c(
+  "RegionNavn",
+  "KommuneNavn",
+  "Postnr",
+  "Sogn",
+  "Afstemningsomraade"
+)
+
+# Genskab model_data fra det oprindelige rensede datasæt
+model_data_base <- homedata_clean %>%
+  mutate(
+    across(where(is.character), as.factor),
+    across(all_of(geo_vars), as.factor)
+  )
+
+# Opret ln(salgspris)
+if (!"ln_Pris_Salg" %in% names(model_data_base)) {
+
+  if (!"Pris_Salg" %in% names(model_data_base)) {
+    stop("Hverken ln_Pris_Salg eller Pris_Salg findes i homedata_clean.")
+  }
+
+  model_data_base <- model_data_base %>%
+    mutate(
+      Pris_Salg = as.numeric(Pris_Salg)
+    )
+
+  if (any(model_data_base$Pris_Salg <= 0, na.rm = TRUE)) {
+    stop("Salgspriser skal være positive for at kunne logtransformeres.")
+  }
+
+  model_data_base <- model_data_base %>%
+    mutate(ln_Pris_Salg = log(Pris_Salg)) %>%
+    select(-Pris_Salg)
+
+} else {
+
+  # Fjern den oprindelige salgspris
+  model_data_base <- model_data_base %>%
+    select(-any_of("Pris_Salg"))
+}
+
+
+# Opret lister til datasæt
+geo_datasets <- list()
+train_datasets <- list()
+test_datasets <- list()
+
+diagnostik <- data.frame()
+
+# Opret fem selvstændige datasæt
+for (geo in geo_vars) {
+
+  cat("\nOpretter datasæt for:", geo, "\n")
+
+  # Fjern de fire andre geografiske variable
+  other_geo <- setdiff(geo_vars, geo)
+
+  dat <- model_data_base %>%
+    select(-all_of(other_geo))
+
+  antal_start <- nrow(dat)
+
+  # Fjern manglende værdier i netop dette datasæt
+  dat <- dat[complete.cases(dat), , drop = FALSE]
+
+  antal_komplette <- nrow(dat)
+
+  # Fjern geografiske områder med færre end 5 observationer
+  antal <- table(dat[[geo]])
+
+  gyldige <- names(antal[antal >= 5])
+
+  dat <- dat[
+    as.character(dat[[geo]]) %in% gyldige,
+    ,
+    drop = FALSE
+  ]
+
+  dat <- droplevels(dat)
+
+  # Gem datasættet
+  geo_datasets[[geo]] <- dat
+
+  # Gem diagnostik
+  diagnostik <- rbind(diagnostik, data.frame(
+    Geografisk_variabel = geo,
+    Observationer_start = antal_start,
+    Efter_manglende = antal_komplette,
+    Efter_minimum_5 = nrow(dat),
+    Antal_geografiske_omraader = nlevels(dat[[geo]])
+  ))
+}
+
+# Vis antal observationer i hvert datasæt
+print(diagnostik)
+
+
+# -----------------------------------------
+# 80/20-OPDELING OG MODELLERING
+# -----------------------------------------
+
+set.seed(123)
+
+results <- data.frame(
+  Geografisk_variabel = character(),
+  RMSE = numeric(),
+  MAE = numeric(),
+  Antal_traening = integer(),
+  Antal_test = integer()
+)
+
+models <- list()
+predictions <- list()
+
+for (geo in geo_vars) {
+
+  cat("\nBehandler:", geo, "\n")
+
+  # Hent det selvstændige datasæt
+  dat <- geo_datasets[[geo]]
+
+  n <- nrow(dat)
+
+  # Find alle kategoriske variable
+  factor_vars <- names(dat)[
+    sapply(dat, is.factor)
+  ]
+
+  # Sørg for at alle faktorniveauer findes i træningsdata
+  anchor_idx <- unlist(
+    lapply(factor_vars, function(v) {
+
+      grupper <- split(
+        seq_len(n),
+        dat[[v]],
+        drop = TRUE
+      )
+
+      vapply(grupper, function(idx) {
+        idx[sample.int(length(idx), 1)]
+      }, integer(1))
+
+    }),
+    use.names = FALSE
+  )
+
+  anchor_idx <- unique(as.integer(anchor_idx))
+
+  # Beregn ønsket træningsstørrelse
+  n_train <- max(
+    floor(0.8 * n),
+    length(anchor_idx)
+  )
+
+  if (n_train >= n) {
+    stop(paste("For få observationer til testdata:", geo))
+  }
+
+  # Udvælg resterende observationer
+  remaining_idx <- setdiff(seq_len(n), anchor_idx)
+
+  n_extra <- n_train - length(anchor_idx)
+
+  extra_idx <- if (n_extra > 0) {
+    sample(remaining_idx, n_extra)
+  } else {
+    integer(0)
+  }
+
+  train_idx <- c(anchor_idx, extra_idx)
+  test_idx <- setdiff(seq_len(n), train_idx)
+
+  # Opret trænings- og testdata
+  train <- droplevels(
+    dat[train_idx, , drop = FALSE]
+  )
+
+  test <- dat[test_idx, , drop = FALSE]
+
+  # Synkroniser faktorniveauer
+  for (v in factor_vars) {
+
+    test[[v]] <- factor(
+      as.character(test[[v]]),
+      levels = levels(train[[v]])
+    )
+  }
+
+  # Gem datasættene
+  train_datasets[[geo]] <- train
+  test_datasets[[geo]] <- test
+
+  # Fjern faktorer med kun ét niveau i træningsdata
+  single_level <- factor_vars[
+    sapply(train[factor_vars], nlevels) < 2
+  ]
+
+  # Kontroller at den geografiske variabel stadig kan estimeres
+  if (geo %in% single_level) {
+    stop(paste("Kun ét niveau for:", geo))
+  }
+
+  # Forklarende variable
+  predictors <- setdiff(
+    names(train),
+    c("ln_Pris_Salg", single_level)
+  )
+
+  # Estimer lineær regression med ln(salgspris)
+  formula <- reformulate(
+    predictors,
+    response = "ln_Pris_Salg"
+  )
+
+  model <- lm(formula, data = train)
+
+  # Forudsig ln(salgspris)
+  pred <- predict(model, newdata = test)
+
+  # Beregn fejlmål på log-skala
+  valid <- is.finite(pred) & is.finite(test$ln_Pris_Salg)
+
+  pred <- pred[valid]
+  actual <- test$ln_Pris_Salg[valid]
+
+  rmse <- sqrt(mean((actual - pred)^2))
+  mae <- mean(abs(actual - pred))
+
+  # Gem model
+  models[[geo]] <- model
+
+  # Gem forudsigelser
+  predictions[[geo]] <- data.frame(
+    Faktisk_ln = actual,
+    Forudsagt_ln = pred
+  )
+
+  # Gem resultater
+  results <- rbind(results, data.frame(
+    Geografisk_variabel = geo,
+    RMSE = rmse,
+    MAE = mae,
+    Antal_traening = nrow(train),
+    Antal_test = length(actual)
+  ))
+}
+
+# Sorter efter laveste RMSE
+results <- results %>%
+  arrange(RMSE)
+
+print(results)
+
+# Find bedste geografiske variabel
+best_geo <- results$Geografisk_variabel[1]
+
+cat("\nBedste geografiske variabel:", best_geo, "\n")
+
+# Gem bedste model
+best_model <- models[[best_geo]]
+```
+
+```{r}
+# Opret datasæt til Sogn-modellen
+
+data_sogn <- homedata_clean
+
+# Opret ln(salgspris), hvis den ikke allerede findes
+if (!"ln_Pris_Salg" %in% names(data_sogn)) {
+
+  data_sogn$Pris_Salg <- as.numeric(data_sogn$Pris_Salg)
+
+  data_sogn <- data_sogn %>%
+    filter(is.finite(Pris_Salg), Pris_Salg > 0) %>%
+    mutate(ln_Pris_Salg = log(Pris_Salg))
+}
+
+# Fjern den oprindelige salgspris
+data_sogn <- data_sogn %>%
+  select(-any_of("Pris_Salg"))
+
+# Konverter kategoriske variable
+data_sogn <- data_sogn %>%
+  mutate(
+    Sogn = as.factor(Sogn),
+    EjdType = as.factor(EjdType),
+    Ejd_Altan = as.factor(Ejd_Altan),
+    Ejd_Energimaerke = as.factor(Ejd_Energimaerke)
+  ) %>%
+  select(-any_of(c(
+    "RegionNavn",
+    "KommuneNavn",
+    "Postnr",
+    "Afstemningsomraade",
+    "Dist_skole",
+    "Dist_raadhus"
+  )))
+
+# Fjern observationer med manglende værdier
+data_sogn <- data_sogn[
+  complete.cases(data_sogn),
+]
+
+# Fjern sogne med færre end 5 observationer
+data_sogn <- data_sogn %>%
+  group_by(Sogn) %>%
+  filter(n() >= 5) %>%
+  ungroup()
+
+# Fjern ubrugte faktorniveauer
+data_sogn <- droplevels(data_sogn)
+
+# Estimer lineær regression med ln(salgspris)
+model_sogn <- lm(
+  ln_Pris_Salg ~ .,
+  data = data_sogn
+)
+
+# Vis modelresultater
+summary(model_sogn)
+
+# ANOVA
+anova(model_sogn)
+
+# Antal observationer
+cat("Antal observationer:", nobs(model_sogn), "\n")
+```
+
+```{r}
+# Kontroller modellens rang
+X <- model.matrix(model_sogn)
+
+cat("Antal modelparametre:", ncol(X), "\n")
+cat("Matrixens rang:", qr(X)$rank, "\n")
+cat("Lineært afhængige parametre:",
+    ncol(X) - qr(X)$rank, "\n")
+
+# Kontroller om koefficienter mangler
+cat("NA-koefficienter:",
+    sum(is.na(coef(model_sogn))), "\n")
+
+# Beregn VIF uden Sogn (kun som diagnostisk test)
+model_vif_test <- update(
+  model_sogn,
+  . ~ . - Sogn
+)
+
+car::vif(model_vif_test)
+```
+
+```{r}
+# Plot af Sogn-modellen
+par(mfrow = c(2, 2))
+
+plot(model_sogn)
+
+par(mfrow = c(1, 1))
+```
+
+
