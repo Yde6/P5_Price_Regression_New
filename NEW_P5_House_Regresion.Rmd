@@ -1,6 +1,7 @@
-#Ændring#Ændring#Ændring#Ændring#Ændring
-#Ændring#Ændring#Ændring#Ændring#Ændring
-#Ændring#Ændring#Ændring#Ændring#Ændring
+#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY
+#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY
+#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY#NY
+
 ```{r}
 load("Homedata.Rda")
 library(dplyr)
@@ -236,6 +237,9 @@ summary(model_step)
 ```{r}
 drop1(model_log_opti, test="F")
 ```
+
+#####################################
+
 Laver ny model uden Corona, AntalRum, AntalPlan, Altan. (Kun meget lidt dårligere) 
 ```{r}
 homedata_prime <- homedata_aalborg %>%
@@ -255,7 +259,7 @@ homedata_prime_clean <- na.omit(homedata_prime)
 model_log_prime <- lm(Log_Pris_Salg ~ . - Pris_Salg, data = homedata_prime_clean)
 summary(model_log_prime)
 ```
-Under om Designmatricen er fuld rank og n>p
+Undersøger om Designmatricen er fuld rank og n>p
 ```{r}
 vif(model_log_prime)
 X <- model.matrix(model_log_prime)
@@ -330,6 +334,16 @@ plot(fitted(model_log_prime), rstandard(model_log_prime),
 
 
 abline(h = c(-2, 2), col = "grey50", lty = 2)
+```
+```{r}
+boxplot((stud_res),
+main = "Boxplot of Model Residuals",
+        ylab = "Residuals",
+        col = "lightblue",
+        border = "darkblue")
+
+# Optional: Add a horizontal reference line at 0
+abline(h = 0, col = "red", lty = 2)
 ```
 
 Undersøger den med stor abs residual (SKAL VI UNDERSØGE FLERE?)
